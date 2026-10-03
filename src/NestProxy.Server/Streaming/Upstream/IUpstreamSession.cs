@@ -40,6 +40,11 @@ public interface IUpstreamSession : IDisposable, IAsyncDisposable
     event Action<SdpResolutionResult>? DescribeResolved;
 
     /// <summary>
+    /// Raised when the upstream connection is closed or fails without being closed by this session.
+    /// </summary>
+    event Action? Disconnected;
+
+    /// <summary>
     /// Opens the upstream transport and sends an initial OPTIONS request.
     /// </summary>
     /// <param name="url">Target RTSP(S) URL.</param>

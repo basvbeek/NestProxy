@@ -141,14 +141,17 @@ public class CameraProxyRunner(
         var factory = scope.ServiceProvider.GetRequiredService<IUpstreamOrchestratorFactory>();
         _relay = factory.Create(CameraId);
 
+        var disconnected = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        _relay.Disconnected += () => disconnected.TrySetResult();
+
         await _relay.StartAsync(camera.LastRtspUrl!, _cts.Token);
         runtimeState.SetRunning(CameraId, true);
 
         // Start stream token extension loop.
-        await ExtensionLoopAsync(camera.ExpiresAt!.Value);
+        await ExtensionLoopAsync(camera.ExpiresAt!.Value, disconnected.Task);
     }
 
-    private async Task ExtensionLoopAsync(DateTime initialExpiry)
+    private async Task ExtensionLoopAsync(DateTime initialExpiry, Task disconnected)
     {
         while (!_cts.IsCancellationRequested)
         {
@@ -160,7 +163,7 @@ public class CameraProxyRunner(
 
             try
             {
-                await Task.Delay(delay, _cts.Token);
+                await Task.WhenAny(Task.Delay(delay, _cts.Token), disconnected);
             }
             catch (TaskCanceledException)
             {
@@ -170,6 +173,12 @@ public class CameraProxyRunner(
 
             if (_cts.IsCancellationRequested)
             {
+                return;
+            }
+
+            if (disconnected.IsCompleted)
+            {
+                // Return to let the outer loop regenerate the session.
                 return;
             }
 

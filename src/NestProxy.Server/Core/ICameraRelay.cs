@@ -25,6 +25,11 @@ public interface ICameraRelay : IDisposable, IAsyncDisposable
     bool IsRunning { get; }
 
     /// <summary>
+    /// Raised when the active upstream session disconnects and the relay no longer receives media.
+    /// </summary>
+    event Action? Disconnected;
+
+    /// <summary>
     /// Initiates an authentication refresh using a new stream token, performing a non-disruptive replay (SETUP/PLAY)
     /// via a staging session. Returns false if a refresh is already in progress or the relay is not in a state that
     /// supports refresh.

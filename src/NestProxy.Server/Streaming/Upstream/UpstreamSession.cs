@@ -10,7 +10,7 @@ namespace NestProxy.Server.Streaming.Upstream;
 /// <summary>
 /// Represents one upstream RTSP session (aggregate or per-track) to Nest. Handles OPTIONS -> DESCRIBE -> SETUP(s) -> PLAY
 /// sequencing, tracks interleaved channel assignment, forwards RTP/RTCP packets, and offers basic keep-alive helpers.
-/// Disconnected event removed per refactor; higher layers own lifetime supervision.
+/// Raises <see cref="Disconnected"/> when the connection drops; higher layers own lifetime supervision.
 /// </summary>
 public sealed class UpstreamSession(
     string cameraId,
@@ -57,6 +57,9 @@ public sealed class UpstreamSession(
     }
 
     /// <inheritdoc />
+    public event Action? Disconnected;
+
+    /// <inheritdoc />
     public uint? LastObservedRtpSsrc { get; private set; }
 
     /// <inheritdoc />
@@ -80,6 +83,7 @@ public sealed class UpstreamSession(
         _ = _transport.GetStream(); // ensures transport is connected
 
         _connection = new RtspConnection(_transport, _frameChannelCapacity);
+        _connection.Disconnected += (_, _) => Disconnected?.Invoke();
         _connection.Start();
 
         // Give the read loop a moment to start.

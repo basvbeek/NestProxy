@@ -269,8 +269,7 @@ public sealed class RtspConnection : IDisposable, IAsyncDisposable
         }
         catch (Exception)
         {
-            // Connection error - signal disconnection
-            Disconnected?.Invoke(this, EventArgs.Empty);
+            // Connection error - disconnection is signaled below.
         }
         finally
         {

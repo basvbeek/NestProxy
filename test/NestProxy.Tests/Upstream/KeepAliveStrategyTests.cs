@@ -21,6 +21,7 @@ public class KeepAliveStrategyTests
         public uint? LastObservedRtpSsrc => null;
         public bool ByeObserved => false;
         public event Action<SdpResolutionResult>? DescribeResolved { add { } remove { } }
+        public event Action? Disconnected { add { } remove { } }
         public bool ControlChannelReady { get; set; } = true;
         public bool ThrowOnGetParameter { get; set; }
         public bool ThrewOnce { get; private set; }

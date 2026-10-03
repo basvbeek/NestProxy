@@ -169,6 +169,62 @@ public sealed class RtspConnectionTests
         await Assert.ThrowsAsync<ObjectDisposedException>(async () => await connection.SendMessageAsync(request, TestContext.Current.CancellationToken));
     }
 
+    [Fact]
+    public async Task ReadFailure_RaisesDisconnectedOnce()
+    {
+        FakeTransport transport = new() { Stream = new FailingStream(waitForCancellation: false) };
+        RtspConnection connection = new(transport);
+        int raised = 0;
+        connection.Disconnected += (_, _) => Interlocked.Increment(ref raised);
+
+        connection.Start();
+        await connection.Messages.Completion;
+        await connection.DisposeAsync(); // waits for the read loop to finish
+
+        Assert.Equal(1, raised);
+    }
+
+    [Fact]
+    public async Task Dispose_DoesNotRaiseDisconnected()
+    {
+        FailingStream stream = new(waitForCancellation: true);
+        FakeTransport transport = new() { Stream = stream };
+        RtspConnection connection = new(transport);
+        int raised = 0;
+        connection.Disconnected += (_, _) => Interlocked.Increment(ref raised);
+
+        connection.Start();
+        await stream.ReadStarted.Task.WaitAsync(TestContext.Current.CancellationToken);
+        await connection.DisposeAsync(); // read fails with an IOException once the connection is disposed
+
+        Assert.Equal(0, raised);
+    }
+
+    /// <summary>
+    /// Stream whose reads fail like a dropped socket, either immediately or once the read is cancelled.
+    /// </summary>
+    private sealed class FailingStream(bool waitForCancellation) : MemoryStream
+    {
+        public TaskCompletionSource ReadStarted { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public override async ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken = default)
+        {
+            ReadStarted.TrySetResult();
+            if (waitForCancellation)
+            {
+                try
+                {
+                    await Task.Delay(Timeout.Infinite, cancellationToken);
+                }
+                catch (OperationCanceledException)
+                {
+                }
+            }
+
+            throw new IOException("Connection reset");
+        }
+    }
+
     private sealed class FakeTransport : IRtspTransport
     {
         public bool Connected { get; set; } = true;

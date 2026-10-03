@@ -59,9 +59,11 @@ public class UpstreamOrchestrator : ICameraRelay
 
         _primarySession = sessionFactory.Create(cameraId, AcceptAllServerCertificate, "primary");
         _primarySession.DescribeResolved += result => OnDescribeResolved(_primarySession, result);
+        _primarySession.Disconnected += () => OnSessionDisconnected(_primarySession);
 
         _secondarySession = sessionFactory.Create(cameraId, AcceptAllServerCertificate, "secondary");
         _secondarySession.DescribeResolved += result => OnDescribeResolved(_secondarySession, result);
+        _secondarySession.Disconnected += () => OnSessionDisconnected(_secondarySession);
     }
 
     /// <summary>
@@ -73,6 +75,9 @@ public class UpstreamOrchestrator : ICameraRelay
     /// Indicates whether the primary upstream session has been started.
     /// </summary>
     public bool IsRunning { get; private set; }
+
+    /// <inheritdoc />
+    public event Action? Disconnected;
 
     /// <summary>
     /// Starts the upstream primary session (if not already started) and begins connecting to the supplied
@@ -121,6 +126,18 @@ public class UpstreamOrchestrator : ICameraRelay
         {
             _logger.LogWarning(ex, "[{CameraId}] [sess-{Sess}] Failed to register camera after DESCRIBE.", CameraId, session.InstanceId);
         }
+    }
+
+    private void OnSessionDisconnected(IUpstreamSession session)
+    {
+        // Sessions being torn down after a switchover also disconnect; only the active one matters.
+        if (!IsRunning || session != _activeSession)
+        {
+            return;
+        }
+
+        _logger.LogWarning("[{CameraId}] [sess-{Sess}] Active upstream session disconnected.", CameraId, session.InstanceId);
+        Disconnected?.Invoke();
     }
 
     /// <summary>
